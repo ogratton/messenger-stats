@@ -1,0 +1,2 @@
+fbchat==1.4.1
+fbchat-archive-parser==2.0.0.post2

@@ -1,3 +1,10 @@
+#!/usr/bin/python3
+"""
+TODO LIST
+    * store in mongodb
+    * load recent messages rather than whole thing again every time
+    * dump all conversations (or first X)
+"""
 from fbchat import Client
 from fbchat.models import *
 import json
@@ -34,7 +41,11 @@ class Session:
 
     def login(self):
         print("Logging in")
-        return Client(self.username, self.password)
+        try:
+            client = Client(self.username, self.password)
+        except FBchatUserError as e:
+            raise ValueError(e)
+        return client
 
     def logout(self):
         if self.client.isLoggedIn():
@@ -117,46 +128,44 @@ class Session:
     @requires_login
     def history_to_json(self, user, limit=1, before=None):
         history = self.client.fetchThreadMessages(user.uid, limit=limit, before=before)
-        print("Retrieved %s messages" % len(history))
-        # history comes out newest first, so traverse backwards
+        print("Retrieved %s messages" % (len(history),))
+        # NOTE: history comes out newest first
         first_timestamp = history[-1].timestamp
-        return first_timestamp, len(history), json.dumps(
-            [self.message_to_dict(message) for message in reversed(history)],
-            separators=(',', ':'),
-            indent=4
+        return (
+            first_timestamp,
+            len(history),
+            [
+                json.dumps(self.message_to_dict(message), separators=(',', ':'), indent=4)
+                for message in reversed(history)
+            ]
         )
 
-    def get_full_history(self, user):
+    def _get_full_history(self, user):
         num = 10000
         received = 10000
         chunks = []
+        messages = []
         before = None
-        filename = "%s_full_history.json" % (user.name.replace(' ', '_'))
-        filepath = '/'.join((os.path.dirname(os.path.abspath(__file__)), filename))
-        with open(filepath, 'w+') as file_:
-            while received == num:
-                if before is not None:
-                    print("Chunk before %s" % datetime.datetime.utcfromtimestamp(int(before[:10])))
-                before, received, json_contents = self.history_to_json(user, limit=num, before=before)
-                chunks.append(json_contents)
-            for chunk in reversed(chunks):
-                print(chunk, file=file_)
+
+        while received == num:
+            if before is not None:
+                print("Chunk before %s" % (datetime.datetime.utcfromtimestamp(int(before[:10])),))
+            before, received, json_contents = self.history_to_json(user, limit=num, before=before)
+            chunks.append(json_contents)
+        for chunk in reversed(chunks):
+            messages.extend(chunk)
+
+        return messages
+
+    def get_history(self, user, limit=None, before=None):
+        if limit is None and before is None:
+            return self._get_full_history(user)
 
     @requires_login
-    def find_user(self, name):
+    def search_users(self, name):
+        """
+        Return list of users matching name,
+        best match first
+        """
         # TODO give the user a choice of the results
-        pass
-
-if __name__ == '__main__':
-    sesh = Session('olivergratton@blueyonder.co.uk', 'HxpNdDv4xigIA8eUhaZQ')
-    client = sesh.get_client()
-
-    # users = client.searchForUsers('Matt Walters')
-    # user = users[0]
-    # print(json.dumps(sesh.user_to_dict(user), separators=(',', ':'), indent=4))
-    # sesh.get_full_history(user)
-
-    groups = client.searchForGroups('HouseHaunted')
-    group = groups[0]
-    print(json.dumps(sesh.group_to_dict(group), separators=(',', ':'), indent=4))
-    sesh.get_full_history(group)
+        return self.client.searchForUsers(name)
