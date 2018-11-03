@@ -5,6 +5,7 @@ Command-line interface
 from main import Session
 from time import sleep
 from functools import wraps
+from fbchat.models import Group, User
 import pymongo
 import json
 import os
@@ -32,6 +33,13 @@ class Console(object):
         self.sesh = self.login()
         self.active_selection = None
 
+        self.mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
+        # self.user = self.sesh.user_obj
+        self.username = self.sesh.users_name.replace(' ', '_').lower()
+        db_name = "messages_%s" % (self.username,)
+        self.mongo_db = self.mongo_client[db_name]
+        self.add_user_to_db(self.sesh.get_user())
+
         self.commands = {
             "help": self.help,
             "select_user": self.select_user,
@@ -45,16 +53,18 @@ class Console(object):
         usr = input("email:")
         # TODO security \o/
         pwd = input('password:')
+        name = input('your name:')
 
         # TODO super secure
-        if not usr and not pwd:
+        if not usr and not pwd and not name:
             with open("info", 'r') as info:
                 info = json.loads(info.read())
                 usr = info["usr"]
                 pwd = info["pwd"]
+                name = info["name"]
 
         try:
-            return Session(usr, pwd)
+            return Session(usr, pwd, name)
         except ValueError as e:
             print(e)
 
@@ -74,7 +84,7 @@ class Console(object):
         """
         search_string = ' '.join(args)
         users = self.sesh.client.searchForUsers(search_string)
-        self._select_user_result(users, "user")
+        return self._select_user_result(users, "user")
 
     def select_group(self, *args):
         """
@@ -83,24 +93,24 @@ class Console(object):
         """
         search_string = ' '.join(args)
         groups = self.sesh.client.searchForGroups(search_string)
-        self._select_user_result(groups, "group")
+        return self._select_user_result(groups, "group")
 
     def _select_user_result(self, users, type):
         """
         Display a list of search results and ask for a selection
         """
-        print(users)
+        if not users:
+            print('< No results found!')
+            return False
         pages = self._pagify_list(users, self.results_size)
         i = 0
-        ok = True
-        while ok:
+        while True:
             for page in pages:
-                for result in page:
+                for _ in page:
                     print("[%d] %s" % (i, users[i].name))
                     i += 1
             inp = input('< Select a %s, or type "n" to cancel\n>' % (type,))
             if inp in ['', 'n']:
-                ok = False
                 break
             error_msg = '< Please enter the number of the search result you want to select\n'
             try:
@@ -114,8 +124,9 @@ class Console(object):
                     print(error_msg)
             except ValueError:
                 print(error_msg)
+        return True
 
-    def messages(self, log="file", limit=None, before=None):
+    def messages(self, log="db", limit=None, before=None):
         """
         get_messages <?log> <?limit> <?before>
         Log: "file" or "db" (JSON file or MongoDB)
@@ -124,6 +135,7 @@ class Console(object):
         Uses current selection (use select_group or select_user)
         """
         # TODO update existing files if we have it already
+        # TODO ignore `limit` and `before` for the mo (always full)
         messages = self.sesh.get_history(self.active_selection, limit, before)
 
         if log == "file":
@@ -134,14 +146,34 @@ class Console(object):
             print("< Invalid logging method %s. Please use 'file' or 'db'" % (log,))
 
     def _to_file(self, messages):
-        filename = "%s_full_history.json" % (self.active_selection.name.replace(' ', '_'))
+        filename = "%s.json" % (self.active_selection.name.replace(' ', '_').lower())
         filepath = '/'.join((os.path.dirname(os.path.abspath(__file__)), "logs", filename))
+        json_messages = json.dumps(messages, separators=(',', ':'), indent=4)
         with open(filepath, 'w+') as file_:
-            print(*messages, sep='\n', file=file_)
+            print(json_messages, sep='\n', file=file_)
 
     def _to_db(self, messages):
-        # TODO mongo stuff
-        pass
+        self._to_file(messages)
+        self.add_user_to_db(self.active_selection)
+        # to do manually from the logs:
+        # mongoimport --db messages --collection ?<name> --file logs/?<name>.json --jsonArray
+        name = self.active_selection.name.replace(' ', '_').lower()
+        coll = self.mongo_db[name]
+        coll.remove()
+        coll.insert(messages)
+        print('< Inserted message history into messages database')
+
+    def add_user_to_db(self, user):
+        coll = self.mongo_db["users"]
+        if isinstance(user, Group):
+            # TODO do each user
+            # for p in user.participants:
+            #     coll.insert(p)
+            print('< TODO insert group members into user database')
+        elif isinstance(user, User):
+            replacement = self.sesh.user_to_dict(user)
+            coll.find_one_and_replace({"user_id": replacement["user_id"]}, replacement)
+            print('< Inserted %s into the users database' % (user.name,))
 
     def quit(self):
         print("< Logging out")
@@ -162,18 +194,20 @@ class Console(object):
         Input loop
         """
         sleep(0.5)
-        while True:
-            inp = input(">")
-            words = inp.split(" ")
-            f, args = words[0], words[1:]
-            if f in self.commands:
-                try:
-                    self.commands[f](*words[1:])
-                except CommandException as e:
-                    print(e)
-            else:
-                print('Invalid input "%s". Type help for list of commands' % (f,))
-
+        try:
+            while True:
+                inp = input(">")
+                words = inp.split(" ")
+                f, args = words[0], words[1:]
+                if f in self.commands:
+                    try:
+                        self.commands[f](*words[1:])
+                    except CommandException as e:
+                        print(e)
+                else:
+                    print('Invalid input "%s". Type help for list of commands' % (f,))
+        except KeyboardInterrupt:
+            self.quit()
 
 if __name__ == '__main__':
     cons = Console()

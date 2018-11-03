@@ -7,9 +7,7 @@ TODO LIST
 """
 from fbchat import Client
 from fbchat.models import *
-import json
 import functools
-import os
 import datetime
 
 
@@ -34,10 +32,14 @@ def catch_interrupt(f):
 
 class Session:
 
-    def __init__(self, username, password):
+    def __init__(self, username, password, users_name):
         self.username = username
         self.password = password
         self.client = self.login()
+
+        # TODO temp
+        self.users_name = users_name
+        # self.user_obj = self.get_user()
 
     def login(self):
         print("Logging in")
@@ -57,6 +59,14 @@ class Session:
     @requires_login
     def get_client(self):
         return self.client
+
+    @requires_login
+    def get_user(self):
+        """
+        Return the user blob of the person logged in
+        """
+        # TODO for now we need them to also tell us their name
+        return self.client.searchForUsers(self.users_name)[0]
 
     @requires_login
     def send_message(self, text, recipient, tt):
@@ -106,22 +116,44 @@ class Session:
             json_friendly_dict[k] = reacts[v]
         return json_friendly_dict
 
+    @staticmethod
+    def parse_attachment(attachment):
+        # TODO
+        if hasattr(attachment, "url"):
+            # Stickers, files, audio,
+            return str(attachment.url)
+        elif hasattr(attachment, "animated_preview_url"):
+            # Animated stickers & gifs and stuff
+            return str(attachment.animated_preview_url)
+        elif hasattr(attachment, "large_preview_url"):
+            # Images
+            return str(attachment.large_preview_url)
+        elif hasattr(attachment, "large_image_url"):
+            # Videos
+            return str(attachment.large_image_url)
+        else:
+            return ""
+
+    @staticmethod
+    def parse_mentions(mentions):
+        # TODO parse mentions
+        return mentions
+
     def message_to_dict(self, message):
         """
         :type message: Message
         """
-        # TODO attachments will be tricky in json
         return {
             "text": message.text,
             "sender": message.author,
             "timestamp": str(datetime.datetime.utcfromtimestamp(int(message.timestamp[:10]))),
-            # "mentions": message.mentions,
+            # "mentions": self.parse_mentions(message.mentions),  # TODO
             "is_read": message.is_read,
             "read_by": message.read_by,
             "reactions": self.parse_message_reaction(message.reactions),
             # "emoji_size"
-            # "sticker"
-            # "attachments"
+            "sticker": self.parse_attachment(message.sticker),
+            "attachments": self.parse_attachment(message.attachments),
             "message_id": message.uid
         }
 
@@ -134,10 +166,7 @@ class Session:
         return (
             first_timestamp,
             len(history),
-            [
-                json.dumps(self.message_to_dict(message), separators=(',', ':'), indent=4)
-                for message in reversed(history)
-            ]
+            [self.message_to_dict(message) for message in reversed(history)]
         )
 
     def _get_full_history(self, user):
@@ -167,5 +196,4 @@ class Session:
         Return list of users matching name,
         best match first
         """
-        # TODO give the user a choice of the results
         return self.client.searchForUsers(name)
