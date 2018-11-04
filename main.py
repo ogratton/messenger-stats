@@ -118,21 +118,30 @@ class Session:
 
     @staticmethod
     def parse_attachment(attachment):
-        # TODO
         if hasattr(attachment, "url"):
-            # Stickers, files, audio,
-            return str(attachment.url)
-        elif hasattr(attachment, "animated_preview_url"):
+            # Stickers, files, audio
+            if attachment.url is not None:
+                return str(attachment.url)
+        if hasattr(attachment, "animated_preview_url"):
             # Animated stickers & gifs and stuff
-            return str(attachment.animated_preview_url)
-        elif hasattr(attachment, "large_preview_url"):
+            if attachment.animated_preview_url is not None:
+                return str(attachment.animated_preview_url)
+        if hasattr(attachment, "large_preview_url"):
             # Images
-            return str(attachment.large_preview_url)
-        elif hasattr(attachment, "large_image_url"):
+            if attachment.large_preview_url is not None:
+                return str(attachment.large_preview_url)
+        if hasattr(attachment, "large_image_url"):
             # Videos
-            return str(attachment.large_image_url)
-        else:
-            return ""
+            if attachment.large_image_url is not None:
+                return str(attachment.large_image_url)
+
+    def parse_attachments(self, attachments):
+        # TODO this is bad
+        lst = []
+        if attachments:
+            for attachment in attachments:
+                lst.append(self.parse_attachment(attachment))
+            return lst
 
     @staticmethod
     def parse_mentions(mentions):
@@ -153,7 +162,7 @@ class Session:
             "reactions": self.parse_message_reaction(message.reactions),
             # "emoji_size"
             "sticker": self.parse_attachment(message.sticker),
-            "attachments": self.parse_attachment(message.attachments),
+            "attachments": self.parse_attachments(message.attachments),
             "message_id": message.uid
         }
 

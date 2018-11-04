@@ -42,8 +42,8 @@ class Console(object):
 
         self.commands = {
             "help": self.help,
-            "select_user": self.select_user,
-            "select_group": self.select_group,
+            "user": self.select_user,
+            "group": self.select_group,
             "messages": self.messages,
             "quit": self.quit
         }
@@ -172,7 +172,7 @@ class Console(object):
             print('< TODO insert group members into user database')
         elif isinstance(user, User):
             replacement = self.sesh.user_to_dict(user)
-            coll.find_one_and_replace({"user_id": replacement["user_id"]}, replacement)
+            coll.find_one_and_replace({"user_id": replacement["user_id"]}, replacement, upsert=True)
             print('< Inserted %s into the users database' % (user.name,))
 
     def quit(self):
