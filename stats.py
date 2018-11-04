@@ -7,17 +7,25 @@ What do I want to do?
         - Have to group into "sessions" so it's not skewed
     - Dump all messages by one sender id
         - For markov chains
-
-
-    maybe something using this sort of thing:
-    grep -e "> begin:place_orders" -e " recv " jabet-placer-jasperwh.log | grep place -A1 | grep recv | grep -Eo 'in .*' | cut -c-6 | sort | uniq -c
+    - Emoji Usage
+        - Will be hard with them being js-escaped
 
 """
 from collections import defaultdict
 import pymongo
+import json
 
 
 # TODO this is all disgusting and repetitious. Can be made lovely
+
+
+def title_gen(f):
+    def wrapper(self, name):
+        title = ' '.join(map(lambda x: x.title(), name.split('_')))
+        title += ' - %s' % (' '.join(map(lambda x: x.title(), f.__name__.split('_'))),)
+        res = f(self, name)
+        return title, res
+    return wrapper
 
 
 class Statistics(object):
@@ -26,6 +34,7 @@ class Statistics(object):
         self.mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
         self.mongo_db = self.mongo_client[name]
 
+    @title_gen
     def total_message_count(self, conversation):
         """
         Count the number of messages in a conversation
@@ -40,8 +49,9 @@ class Statistics(object):
         for message in all_messages:
             if message["text"]:
                 counts[message["sender"]] += 1
-        return sorted([(k, v) for k, v in counts.items()], key=lambda a: a[1], reverse=True)
+        return counts
 
+    @title_gen
     def total_message_length(self, conversation):
         """
         Count the length of all the messages in a conversation
@@ -53,8 +63,9 @@ class Statistics(object):
         for message in all_messages:
             if message["text"]:
                 counts[message["sender"]] += len(message["text"])
-        return sorted([(k, v) for k, v in counts.items()], key=lambda a: a[1], reverse=True)
+        return counts
 
+    @title_gen
     def total_attachments_sent(self, conversation):
         """
         Count the number of attachments (photos etc) sent by each person
@@ -65,7 +76,19 @@ class Statistics(object):
         for message in all_messages:
             if message["attachments"]:
                 counts[message["sender"]] += len(message["attachments"])
-        return sorted([(k, v) for k, v in counts.items()], key=lambda a: a[1], reverse=True)
+        return counts
+
+    @title_gen
+    def average_message_length(self, conversation):
+        _, t_l = self.total_message_length(conversation)
+        _, t_c = self.total_message_count(conversation)
+
+        # absolutely disgusting
+        # return [(k, v/u) for (k, v) in t_l for (l, u) in t_c if k == l]
+        d = defaultdict(float)
+        for k, v in t_l.items():
+            d[k] = v/t_c[k]
+        return d
 
     def for_all(self, function):
         """
@@ -77,9 +100,22 @@ class Statistics(object):
                 dic[coll] = function(coll)
         return dic
 
+    def retrieve_name(self, id):
+        """ get name from the users database """
+        collection = self.mongo_db["users"]
+        res = collection.find({"user_id": str(id)}, {"user_name": 1}).limit(1)
+        for r in res:
+            return r["user_name"]
+        return str(id)
+
+    def sort_dict(self, d):
+        """ return as sorted list """
+        return sorted([(k, v) for k, v in d.items()], key=lambda a: a[1], reverse=True)
+
 if __name__ == "__main__":
     s = Statistics("messages_oliver_gratton")
-    # print(s.total_message_count("maurice_hewins"))
-    # print(s.total_message_length("maurice_hewins"))
-    # print(s.total_attachments_sent("maurice_hewins"))
-    print(s.for_all(s.total_message_count))
+    print(json.dumps(s.total_message_count("jack_morrison")))
+    print(json.dumps(s.total_message_length("jack_morrison")))
+    print(json.dumps(s.average_message_length("jack_morrison")))
+    # print(json.dumps(s.for_all(s.average_message_length)))
+    # print(s.retrieve_name(100005848782846))

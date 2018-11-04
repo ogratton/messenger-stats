@@ -89,7 +89,8 @@ class Session:
             "user_id": user.uid,
             "user_name": user.name,
             "user_photo": user.photo,
-            "user_url": user.url
+            "user_url": user.url,
+            "affinity": user.affinity
         }
 
     @staticmethod
@@ -198,11 +199,3 @@ class Session:
     def get_history(self, user, limit=None, before=None):
         if limit is None and before is None:
             return self._get_full_history(user)
-
-    @requires_login
-    def search_users(self, name):
-        """
-        Return list of users matching name,
-        best match first
-        """
-        return self.client.searchForUsers(name)

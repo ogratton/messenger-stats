@@ -45,6 +45,7 @@ class Console(object):
             "user": self.select_user,
             "group": self.select_group,
             "messages": self.messages,
+            "add": self.add_selection_to_db,
             "quit": self.quit
         }
 
@@ -83,7 +84,7 @@ class Console(object):
         Searches for a person and returns a list of candidates
         """
         search_string = ' '.join(args)
-        users = self.sesh.client.searchForUsers(search_string)
+        users = self.sesh.client.searchForUsers(search_string, limit=self.results_size)
         return self._select_user_result(users, "user")
 
     def select_group(self, *args):
@@ -92,7 +93,7 @@ class Console(object):
         Searches for a group and returns a list of candidates
         """
         search_string = ' '.join(args)
-        groups = self.sesh.client.searchForGroups(search_string)
+        groups = self.sesh.client.searchForGroups(search_string, limit=self.results_size)
         return self._select_user_result(groups, "group")
 
     def _select_user_result(self, users, type):
@@ -109,6 +110,7 @@ class Console(object):
                 for _ in page:
                     print("[%d] %s" % (i, users[i].name))
                     i += 1
+            i = 0
             inp = input('< Select a %s, or type "n" to cancel\n>' % (type,))
             if inp in ['', 'n']:
                 break
@@ -162,6 +164,9 @@ class Console(object):
         coll.remove()
         coll.insert(messages)
         print('< Inserted message history into messages database')
+
+    def add_selection_to_db(self):
+        self.add_user_to_db(self.active_selection)
 
     def add_user_to_db(self, user):
         coll = self.mongo_db["users"]
