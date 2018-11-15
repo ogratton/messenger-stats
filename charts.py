@@ -106,7 +106,7 @@ class Charts(object):
         plt.show()
 
     def line_graph(self, json_data, nested=False):
-        # TODO
+        # TODO will need to count for each day/hour/whatever
         print("TODO")
 
     def map_ids_to_names(self, ids):

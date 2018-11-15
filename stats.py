@@ -16,14 +16,14 @@ import pymongo
 import json
 
 
-# TODO this is all disgusting and repetitious. Can be made lovely
+# TODO this is all disgusting and repetitious. Can be made lovely-ish
 
 
 def title_gen(f):
-    def wrapper(self, name):
-        title = ' '.join(map(lambda x: x.title(), name.split('_')))
+    def wrapper(self, conversation):
+        title = ' '.join(map(lambda x: x.title(), conversation.split('_')))
         title += ' - %s' % (' '.join(map(lambda x: x.title(), f.__name__.split('_'))),)
-        res = f(self, name)
+        res = f(self, conversation)
         return title, res
     return wrapper
 
@@ -40,7 +40,7 @@ class Statistics(object):
         Count the number of messages in a conversation
         Should not count empty messages
         (Almost) equivalent to:
-        grep -e "sender" thomas_brex.json | grep -Eo '":".*",' | cut -d '"' -f 3 | sort | uniq -c
+        grep -e "sender" <name>.json | grep -Eo '":".*",' | cut -d '"' -f 3 | sort | uniq -c
         :return: a dict of {participant: count}
         """
         collection = self.mongo_db[conversation]
@@ -83,12 +83,15 @@ class Statistics(object):
         _, t_l = self.total_message_length(conversation)
         _, t_c = self.total_message_count(conversation)
 
-        # absolutely disgusting
-        # return [(k, v/u) for (k, v) in t_l for (l, u) in t_c if k == l]
         d = defaultdict(float)
         for k, v in t_l.items():
             d[k] = v/t_c[k]
         return d
+
+    @title_gen
+    def cumulative_messages_sent(self, conversation):
+        # TODO
+        pass
 
     def for_all(self, function):
         """
@@ -108,14 +111,15 @@ class Statistics(object):
             return r["user_name"]
         return str(id)
 
-    def sort_dict(self, d):
+    @staticmethod
+    def sort_dict(dic):
         """ return as sorted list """
-        return sorted([(k, v) for k, v in d.items()], key=lambda a: a[1], reverse=True)
+        return sorted([(k, v) for k, v in dic.items()], key=lambda a: a[1], reverse=True)
 
 if __name__ == "__main__":
     s = Statistics("messages_oliver_gratton")
-    print(json.dumps(s.total_message_count("jack_morrison")))
-    print(json.dumps(s.total_message_length("jack_morrison")))
-    print(json.dumps(s.average_message_length("jack_morrison")))
+    print(json.dumps(s.total_message_count("jack_morrison")[1]))
+    print(json.dumps(s.total_message_length("jack_morrison")[1]))
+    print(json.dumps(s.average_message_length("jack_morrison")[1]))
     # print(json.dumps(s.for_all(s.average_message_length)))
     # print(s.retrieve_name(100005848782846))
