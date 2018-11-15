@@ -28,11 +28,11 @@ class DashCharts:
         # TODO account for value being a list
         # TODO change how data is made in stats so this isn't silly
         return [
-            {'x': [1], 'y': [v], 'type': 'bar', 'name': stats.retrieve_name(k)}
+            {'x': [1], 'y': [v], 'type': 'bar', 'name': self.stats.retrieve_name(k)}
             for (k, v) in data.items()
         ]
 
-    def make_bar_graph(self, transformed_data, title):
+    def make_bar_chart(self, transformed_data, title):
         # return dcc.Graph(
         #         id='bar-chart',
         #         figure={
@@ -186,10 +186,10 @@ class DashCharts:
 
 
 if __name__ == '__main__':
-    stats = Statistics("messages_oliver_gratton")
-    title, data = stats.total_message_count("maurice_hewins")
+    d = DashCharts(Statistics("messages_oliver_gratton"))
+
+    title, data = d.stats.total_message_count("maurice_hewins")
     print(dict(data))
 
-    d = DashCharts(stats)
-    d.make_app(d.make_pie_chart(d.transform_data(data), title))
+    d.make_app(d.make_bar_chart(d.transform_data(data), title))
     d.start_app()
