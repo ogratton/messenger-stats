@@ -188,7 +188,7 @@ class Session:
 
         while received == num:
             if before is not None:
-                print("Chunk before %s" % (datetime.datetime.utcfromtimestamp(int(before[:10])),))
+                print("Getting chunk before %s" % (datetime.datetime.utcfromtimestamp(int(before[:10])),))
             before, received, json_contents = self.history_to_json(user, limit=num, before=before)
             chunks.append(json_contents)
         for chunk in reversed(chunks):

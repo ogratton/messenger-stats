@@ -127,5 +127,5 @@ class Charts(object):
 
 if __name__ == "__main__":
     c = Charts("messages_oliver_gratton")
-    c.pie_chart(*c.stats.total_message_length("maurice_hewins"), nested=False)
+    c.pie_chart(*c.stats.total_messages_length("maurice_hewins"), nested=False)
     # c.pie_chart(*c.stats.for_all(c.stats.average_message_length), nested=True)

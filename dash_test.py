@@ -1,8 +1,10 @@
 from stats import Statistics
+from collections import defaultdict
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objs as go
+import operator
 
 
 class DashCharts:
@@ -17,72 +19,91 @@ class DashCharts:
             'text': '#0E3E8C'
         }
 
-    def transform_data(self, data):
+    def solo_conversations_compare(self, stat, users):
+        """
+        Make a bar chart of some statistic for some users
+        :param stat The func name of the statistic (see stats.py) e.g. "total_messages_sent"
+        :param users: List of the names of users e.g. ["bob_geldof", "mother_superior"]
+        :return: Dash graph
+        """
+        data = self.make_bar_data([self.get_data(user, stat) for user in users])
+        print(data)
+        self.make_app(self.make_bar_chart(data, "%s in Solo Conversations" % (stat,)))
+
+    def get_data(self, conversation, stat):
+        """
+        Retrieve the data from the database for one conversation
+        :param conversation: name of the collection in the database e.g. "celia_imrie"
+        :param stat: The func name of the statistic (see stats.py) e.g. "total_messages_sent"
+        :return: List of data
+        """
+        # TODO error handling for bad stats/conversations
+        return {
+            "total_messages_sent": self.stats.total_messages_sent,
+            "total_messages_length": self.stats.total_messages_length,
+            "average_message_length": self.stats.average_message_length
+        }[stat](conversation)
+
+    def make_bar_data(self, data):
         """
         Convert data of form
-        {'100000793057611': 10501, '100000134684929': 12101}
+        [{'100000793057611': 10501, '100000134684929': 12101}...]
         to
-        [{'x': [1], 'y': [10501], 'type': 'bar', 'name':'Oliver Gratton'},
-         {'x': [1], 'y': [12101], 'type': 'bar', 'name':'Maurice Hewins'}]
+        a go.Bar object
         """
-        # TODO account for value being a list
-        # TODO change how data is made in stats so this isn't silly
-        return [
-            {'x': [1], 'y': [v], 'type': 'bar', 'name': self.stats.retrieve_name(k)}
-            for (k, v) in data.items()
-        ]
+        # need to separate the user's data from their partners'
+        # but first we need to know which one the user is
+        id_counter = defaultdict(int)
+        for dic in data:
+            for k, v in dic.items():
+                id_counter[k] += 1
+        user_id = max(id_counter.items(), key=operator.itemgetter(1))[0]
+
+        names = []
+        user_data = []
+        partners_data = []
+        for dic in data:
+            for k, v in dic.items():
+                if k == user_id:
+                    user_data.append(v)
+                else:
+                    partners_data.append(v)
+                    names.append(self.stats.retrieve_name(k))
+
+        user = go.Bar(
+            x=names,
+            y=user_data,
+            name="You",
+            marker=go.bar.Marker(
+                color='rgb(55, 83, 109)'
+            )
+        )
+        partners = go.Bar(
+            x=names,
+            y=partners_data,
+            name="Them",
+            marker=go.bar.Marker(
+                color='rgb(26, 118, 255)'
+            )
+        )
+        return [user, partners]
 
     def make_bar_chart(self, transformed_data, title):
-        # return dcc.Graph(
-        #         id='bar-chart',
-        #         figure={
-        #             'data': transformed_data,
-        #             'layout': {
-        #                 'plot_bgcolor': self.colours['background'],
-        #                 'paper_bgcolor': self.colours['background'],
-        #                 'font': {
-        #                     'color': self.colours['text']
-        #                 },
-        #                 'title': title
-        #             }
-        #         }
-        #     )
         return dcc.Graph(
             figure=go.Figure(
-                data=[
-                    go.Bar(
-                        x=[1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-                           2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012],
-                        y=[219, 146, 112, 127, 124, 180, 236, 207, 236, 263,
-                           350, 430, 474, 526, 488, 537, 500, 439],
-                        name='Rest of world',
-                        marker=go.bar.Marker(
-                            color='rgb(55, 83, 109)'
-                        )
-                    ),
-                    go.Bar(
-                        x=[1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-                           2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012],
-                        y=[16, 13, 10, 11, 28, 37, 43, 55, 56, 88, 105, 156, 270,
-                           299, 340, 403, 549, 499],
-                        name='China',
-                        marker=go.bar.Marker(
-                            color='rgb(26, 118, 255)'
-                        )
-                    )
-                ],
+                data=transformed_data,
                 layout=go.Layout(
-                    title='US Export of Plastic Scrap',
+                    title=title,
                     showlegend=True,
                     legend=go.layout.Legend(
                         x=0,
                         y=1.0
                     ),
-                    margin=go.layout.Margin(l=40, r=0, t=40, b=30)
+                    # margin=go.layout.Margin(l=40, r=0, t=40, b=30)
                 )
             ),
-            style={'height': 300},
-            id='my-graph'
+            style={'height': 600},
+            id='my-bar-graph'
         )
 
     def make_pie_chart(self, transformed_data, title):
@@ -186,10 +207,13 @@ class DashCharts:
 
 
 if __name__ == '__main__':
-    d = DashCharts(Statistics("messages_oliver_gratton"))
+    dc = DashCharts(Statistics("messages_oliver_gratton"))
 
-    title, data = d.stats.total_message_count("maurice_hewins")
-    print(dict(data))
+    # TODO temp way of getting all user chats
+    import os
+    all_files = filter(lambda x: "user" in x, list(map(lambda x: x.split('.')[0], os.listdir('logs'))))
+    all_names = [x[len("user_"):] for x in all_files]
+    print(all_names)
 
-    d.make_app(d.make_bar_chart(d.transform_data(data), title))
-    d.start_app()
+    dc.solo_conversations_compare("total_messages_sent", all_names)
+    dc.start_app()

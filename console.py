@@ -6,6 +6,9 @@ from main import Session
 from time import sleep
 from functools import wraps
 from fbchat.models import Group, User
+from collections import namedtuple
+import subprocess
+import platform
 import pymongo
 import json
 import os
@@ -13,6 +16,9 @@ import os
 
 class CommandException(Exception):
     pass
+
+
+Selection = namedtuple('Selection', ['selection', 'type'])
 
 
 def command(func):
@@ -31,13 +37,13 @@ class Console(object):
 
     def __init__(self):
         self.sesh = self.login()
-        self.active_selection = None
+        self.active_sel = None
 
         self.mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
         # self.user = self.sesh.user_obj
         self.username = self.sesh.users_name.replace(' ', '_').lower()
-        db_name = "messages_%s" % (self.username,)
-        self.mongo_db = self.mongo_client[db_name]
+        self.db_name = "messages_%s" % (self.username,)
+        self.mongo_db = self.mongo_client[self.db_name]
         self.add_user_to_db(self.sesh.get_user())
 
         self.commands = {
@@ -46,6 +52,7 @@ class Console(object):
             "group": self.select_group,
             "messages": self.messages,
             "add": self.add_selection_to_db,
+            "import": self.import_logs,
             "quit": self.quit
         }
 
@@ -80,7 +87,7 @@ class Console(object):
 
     def select_user(self, *args):
         """
-        select_user <name>
+        user <name>
         Searches for a person and returns a list of candidates
         """
         search_string = ' '.join(args)
@@ -89,7 +96,7 @@ class Console(object):
 
     def select_group(self, *args):
         """
-        select_group <name>
+        group <name>
         Searches for a group and returns a list of candidates
         """
         search_string = ' '.join(args)
@@ -120,7 +127,7 @@ class Console(object):
                 if index < len(users):
                     selection = users[index]
                     print("< Selected %s" % (selection.name,))
-                    self.active_selection = selection
+                    self.active_sel = Selection(selection, type)
                     return True
                 else:
                     print(error_msg)
@@ -130,7 +137,7 @@ class Console(object):
 
     def messages(self, log="db", limit=None, before=None):
         """
-        get_messages <?log> <?limit> <?before>
+        messages <?log> <?limit> <?before>
         Log: "file" or "db" (JSON file or MongoDB)
         If limit is empty, will return all
         If before is empty, will return from now
@@ -138,35 +145,41 @@ class Console(object):
         """
         # TODO update existing files if we have it already
         # TODO ignore `limit` and `before` for the mo (always full)
-        messages = self.sesh.get_history(self.active_selection, limit, before)
+        messages = self.sesh.get_history(self.active_sel.selection, limit, before)
+
+        name = "%s_%s" % (self.active_sel.type, self.active_sel.selection.name.replace(' ', '_').lower())
 
         if log == "file":
-            self._to_file(messages)
+            self._to_file(messages, name)
         elif log == "db":
-            self._to_db(messages)
+            self._to_db(messages, name)
         else:
             print("< Invalid logging method %s. Please use 'file' or 'db'" % (log,))
 
-    def _to_file(self, messages):
-        filename = "%s.json" % (self.active_selection.name.replace(' ', '_').lower())
+    def _to_file(self, messages, name):
+        filename = name + ".json"
         filepath = '/'.join((os.path.dirname(os.path.abspath(__file__)), "logs", filename))
         json_messages = json.dumps(messages, separators=(',', ':'), indent=4)
         with open(filepath, 'w+') as file_:
             print(json_messages, sep='\n', file=file_)
 
-    def _to_db(self, messages):
-        self._to_file(messages)
-        self.add_user_to_db(self.active_selection)
-        # to do manually from the logs:
-        # mongoimport --db messages --collection ?<name> --file logs/?<name>.json --jsonArray
-        name = self.active_selection.name.replace(' ', '_').lower()
-        coll = self.mongo_db[name]
+    def _to_db(self, messages, name):
+        self._to_file(messages, name)
+        self.add_user_to_db(self.active_sel.selection)
+        # TODO we should use the <name> var eventually
+        chat_name = self.active_sel.selection.name.replace(' ', '_').lower()
+        coll = self.mongo_db[chat_name]
         coll.remove()
         coll.insert(messages)
         print('< Inserted message history into messages database')
 
     def add_selection_to_db(self):
-        self.add_user_to_db(self.active_selection)
+        """
+        Add the selected user/group to the names database
+        (This is totally useless and messages should be called
+        automatically after selecting)
+        """
+        self.add_user_to_db(self.active_sel.selection)
 
     def add_user_to_db(self, user):
         coll = self.mongo_db["users"]
@@ -180,7 +193,36 @@ class Console(object):
             coll.find_one_and_replace({"user_id": replacement["user_id"]}, replacement, upsert=True)
             print('< Inserted %s into the users database' % (user.name,))
 
+    def import_logs(self, path='logs', *args):
+        """
+        Import any json logs in the /logs folder
+        """
+        all_names = list(map(lambda x: x.split('.')[0], os.listdir(path)))
+        for name in all_names:
+            for arg in args:
+                if arg in name:
+                    self._shell_import(path, name)
+            else:
+                self._shell_import(path, name)
+
+    def _shell_import(self, path, name):
+        # TODO this doesn't let the command run
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        sep = "\\" if platform.system() == "Windows" else "/"
+        file_path = sep.join([dir_path, path, name])
+        shell_command = "mongoimport --db %s --collection %s --file %s.json --jsonArray" % (
+            self.db_name, name, file_path
+        )
+        print(shell_command)
+        try:
+            subprocess.Popen(shell_command.split(' '), shell=True)
+        except FileNotFoundError as e:
+            print(e)
+
     def quit(self):
+        """
+        Log Out
+        """
         print("< Logging out")
         self.sesh.logout()
         exit()

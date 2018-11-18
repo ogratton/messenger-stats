@@ -18,24 +18,13 @@ import json
 
 # TODO this is all disgusting and repetitious. Can be made lovely-ish
 
-
-def title_gen(f):
-    def wrapper(self, conversation):
-        title = ' '.join(map(lambda x: x.title(), conversation.split('_')))
-        title += ' - %s' % (' '.join(map(lambda x: x.title(), f.__name__.split('_'))),)
-        res = f(self, conversation)
-        return title, res
-    return wrapper
-
-
 class Statistics(object):
 
     def __init__(self, name):
         self.mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
         self.mongo_db = self.mongo_client[name]
 
-    @title_gen
-    def total_message_count(self, conversation):
+    def total_messages_sent(self, conversation):
         """
         Count the number of messages in a conversation
         Should not count empty messages
@@ -51,8 +40,7 @@ class Statistics(object):
                 counts[message["sender"]] += 1
         return counts
 
-    @title_gen
-    def total_message_length(self, conversation):
+    def total_messages_length(self, conversation):
         """
         Count the length of all the messages in a conversation
         :return: a dict of {participation: length}
@@ -65,7 +53,6 @@ class Statistics(object):
                 counts[message["sender"]] += len(message["text"])
         return counts
 
-    @title_gen
     def total_attachments_sent(self, conversation):
         """
         Count the number of attachments (photos etc) sent by each person
@@ -78,17 +65,15 @@ class Statistics(object):
                 counts[message["sender"]] += len(message["attachments"])
         return counts
 
-    @title_gen
     def average_message_length(self, conversation):
-        _, t_l = self.total_message_length(conversation)
-        _, t_c = self.total_message_count(conversation)
+        t_l = self.total_messages_length(conversation)
+        t_c = self.total_messages_sent(conversation)
 
         d = defaultdict(float)
         for k, v in t_l.items():
             d[k] = v/t_c[k]
         return d
 
-    @title_gen
     def cumulative_messages_sent(self, conversation):
         # TODO
         pass
@@ -118,8 +103,8 @@ class Statistics(object):
 
 if __name__ == "__main__":
     s = Statistics("messages_oliver_gratton")
-    print(json.dumps(s.total_message_count("jack_morrison")[1]))
-    print(json.dumps(s.total_message_length("jack_morrison")[1]))
+    print(json.dumps(s.total_messages_sent("jack_morrison")[1]))
+    print(json.dumps(s.total_messages_length("jack_morrison")[1]))
     print(json.dumps(s.average_message_length("jack_morrison")[1]))
     # print(json.dumps(s.for_all(s.average_message_length)))
     # print(s.retrieve_name(100005848782846))
