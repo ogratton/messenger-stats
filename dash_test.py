@@ -206,14 +206,15 @@ class DashCharts:
         self.app.run_server(debug=True)
 
 
-if __name__ == '__main__':
-    dc = DashCharts(Statistics("messages_oliver_gratton"))
-
+def get_all_user_names():
     # TODO temp way of getting all user chats
     import os
     all_files = filter(lambda x: "user" in x, list(map(lambda x: x.split('.')[0], os.listdir('logs'))))
-    all_names = [x[len("user_"):] for x in all_files]
-    print(all_names)
+    return [x[len("user_"):] for x in all_files]
 
+
+if __name__ == '__main__':
+    dc = DashCharts(Statistics("messages_oliver_gratton"))
+    all_names = get_all_user_names()
     dc.solo_conversations_compare("total_messages_sent", all_names)
     dc.start_app()

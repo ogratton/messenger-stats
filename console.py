@@ -8,6 +8,7 @@ from functools import wraps
 from fbchat.models import Group, User
 from collections import namedtuple
 import subprocess
+import datetime
 import platform
 import pymongo
 import json
@@ -171,7 +172,17 @@ class Console(object):
         coll = self.mongo_db[chat_name]
         coll.remove()
         coll.insert(messages)
+        # TODO inefficient to loop through again (but does it matter?):
+        self._db_convert_timestamps(coll)
         print('< Inserted message history into messages database')
+
+    @staticmethod
+    def _db_convert_timestamps(coll):
+        print("Converting timestamps...")
+
+        for u in coll.find():
+            u["timestamp"] = datetime.datetime.strptime(u["timestamp"], "%Y-%m-%d %H:%M:%S")
+            coll.save(u)
 
     def add_selection_to_db(self):
         """

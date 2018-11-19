@@ -156,6 +156,7 @@ class Session:
         return {
             "text": message.text,
             "sender": message.author,
+            # TODO we get rid of microseconds because they aren't always given
             "timestamp": str(datetime.datetime.utcfromtimestamp(int(message.timestamp[:10]))),
             # "mentions": self.parse_mentions(message.mentions),  # TODO
             "is_read": message.is_read,

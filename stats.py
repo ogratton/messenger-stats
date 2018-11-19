@@ -14,6 +14,7 @@ What do I want to do?
 from collections import defaultdict
 import pymongo
 import json
+import bson
 
 
 # TODO this is all disgusting and repetitious. Can be made lovely-ish
@@ -75,8 +76,40 @@ class Statistics(object):
         return d
 
     def cumulative_messages_sent(self, conversation):
+        collection = self.mongo_db[conversation]
         # TODO
-        pass
+        """ ideally want this functionality:
+        db.thomas_brex.group(
+        {
+            keyf: function(doc) {
+                var date = new Date(doc.timestamp);
+                date.setSeconds(0)
+                return {'day':date};
+            },
+            cond: {text: { $ne: null }},
+            initial: {count:0},
+            reduce: function(obj, prev) {prev.count++;}
+        });
+        """
+        result = collection.aggregate([
+            # Match the documents possible
+            {"$match": {"text": {"$ne": None}}},
+
+            # Group the documents and "count" via $sum on the values
+            {"$group": {
+                "_id": {
+                    "timestamp": {
+                        # TODO want to make a ISODate obj (with no seconds)
+                        "year": {"$year": "$timestamp"},
+                        "month": {"$month": "$timestamp"},
+                        "day": {"$dayOfMonth": "$timestamp"},
+                        "minute": {"$minute": "$timestamp"}
+                    }
+                },
+                "count": {"$sum": 1}
+            }}
+        ])
+        return result
 
     def for_all(self, function):
         """
@@ -103,8 +136,9 @@ class Statistics(object):
 
 if __name__ == "__main__":
     s = Statistics("messages_oliver_gratton")
-    print(json.dumps(s.total_messages_sent("jack_morrison")[1]))
-    print(json.dumps(s.total_messages_length("jack_morrison")[1]))
-    print(json.dumps(s.average_message_length("jack_morrison")[1]))
+    # print(json.dumps(s.total_messages_sent("jack_morrison")))
+    # print(json.dumps(s.total_messages_length("jack_morrison")))
+    # print(json.dumps(s.average_message_length("jack_morrison")))
     # print(json.dumps(s.for_all(s.average_message_length)))
     # print(s.retrieve_name(100005848782846))
+    print(*s.cumulative_messages_sent("thomas_brex"))
