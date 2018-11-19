@@ -75,40 +75,50 @@ class Statistics(object):
             d[k] = v/t_c[k]
         return d
 
-    def cumulative_messages_sent(self, conversation):
+    def cumulative_messages_sent(self, conversation, resolution="month"):
         collection = self.mongo_db[conversation]
-        # TODO
-        """ ideally want this functionality:
-        db.thomas_brex.group(
-        {
-            keyf: function(doc) {
-                var date = new Date(doc.timestamp);
-                date.setSeconds(0)
-                return {'day':date};
-            },
-            cond: {text: { $ne: null }},
-            initial: {count:0},
-            reduce: function(obj, prev) {prev.count++;}
-        });
-        """
-        result = collection.aggregate([
-            # Match the documents possible
-            {"$match": {"text": {"$ne": None}}},
 
-            # Group the documents and "count" via $sum on the values
-            {"$group": {
-                "_id": {
-                    "timestamp": {
-                        # TODO want to make a ISODate obj (with no seconds)
-                        "year": {"$year": "$timestamp"},
-                        "month": {"$month": "$timestamp"},
-                        "day": {"$dayOfMonth": "$timestamp"},
-                        "minute": {"$minute": "$timestamp"}
+        format = {
+            "year": "%Y",
+            "month": "%Y-%m",
+            "day": "%Y-%m-%d",
+            "hour": "%Y-%m-%dT%H:00:00Z",
+            "minute": "%Y-%m-%dT%H:%M:00Z",
+            "second": "%Y-%m-%dT%H:%M:%SZ"
+        }[resolution]
+
+        result = collection.aggregate(
+            [
+                {
+                    "$match": {"$and": [{"text": {"$ne": None}}, {"text": {"$ne": ""}}]}
+                },
+                {
+                    "$project": {
+                        "_id": 0,
+                        "timestamp": {"$dateToString": {"format": format, "date": "$timestamp"}},
                     }
                 },
-                "count": {"$sum": 1}
-            }}
-        ])
+                {
+                    "$group": {
+                        "_id": "$timestamp",
+                        "count": {"$sum": 1}
+                    }
+                },
+                {
+                    "$sort": {
+                        "_id": 1
+                    }
+                },
+                {
+                    "$project": {
+                        "_id": 0,
+                        "timestamp": "$_id",
+                        "count": 1
+                    }
+                }
+            ]
+        )
+
         return result
 
     def for_all(self, function):
@@ -141,4 +151,4 @@ if __name__ == "__main__":
     # print(json.dumps(s.average_message_length("jack_morrison")))
     # print(json.dumps(s.for_all(s.average_message_length)))
     # print(s.retrieve_name(100005848782846))
-    print(*s.cumulative_messages_sent("thomas_brex"))
+    print(*s.cumulative_messages_sent("wales_is_fuckin_sick", resolution="year"), sep=', ')
