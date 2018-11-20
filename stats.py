@@ -75,8 +75,10 @@ class Statistics(object):
             d[k] = v/t_c[k]
         return d
 
-    def cumulative_messages_sent(self, conversation, resolution="month"):
+    def time_chunks(self, conversation, resolution="month"):
         collection = self.mongo_db[conversation]
+
+        # TODO fill in the gaps with zeroes (or just either side of an edge value)
 
         format = {
             "year": "%Y",
@@ -151,4 +153,4 @@ if __name__ == "__main__":
     # print(json.dumps(s.average_message_length("jack_morrison")))
     # print(json.dumps(s.for_all(s.average_message_length)))
     # print(s.retrieve_name(100005848782846))
-    print(*s.cumulative_messages_sent("wales_is_fuckin_sick", resolution="year"), sep=', ')
+    print(*s.time_chunks("wales_is_fuckin_sick", resolution="year"), sep=', ')

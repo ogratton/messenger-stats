@@ -19,18 +19,36 @@ class DashCharts:
             'text': '#0E3E8C'
         }
 
-    def solo_conversations_compare(self, stat, users):
+    def solo_conversations_bars(self, stat, users):
         """
         Make a bar chart of some statistic for some users
         :param stat The func name of the statistic (see stats.py) e.g. "total_messages_sent"
         :param users: List of the names of users e.g. ["bob_geldof", "mother_superior"]
         :return: Dash graph
         """
-        data = self.make_bar_data([self.get_data(user, stat) for user in users])
-        print(data)
-        self.make_app(self.make_bar_chart(data, "%s in Solo Conversations" % (stat,)))
+        data = self.transform_bar_data([self.get_data(user, stat) for user in users])
+        self.make_app(self.make_chart(data, "%s in Solo Conversations" % (stat,)))
 
-    def get_data(self, conversation, stat):
+    def conversation_time_chunks(self, users, resolution="day", cumulative=True):
+        """
+        Make a line graph of messages sent over time
+        :param users: List of the names of users e.g. ["bob_geldof", "mother_superior"]
+        :param resolution: year, month, day, hour, minute, second
+        :return: Dash graph
+        """
+        transform = self.transform_cumulative_data if cumulative else self.transform_line_data
+        data = transform(
+            [self.get_data(user, "time_chunks", resolution) for user in users],
+            self.snake_case_to_names(users)
+        )
+        c_string = 'Cumulative ' if cumulative else ''
+        self.make_app(self.make_chart(data, "%sMessages Sent Over Time (per %s)" % (c_string, resolution,)))
+
+    @staticmethod
+    def snake_case_to_names(users):
+        return [' '.join((map(lambda x: x.title(), user.split('_')))) for user in users]
+
+    def get_data(self, conversation, stat, *args):
         """
         Retrieve the data from the database for one conversation
         :param conversation: name of the collection in the database e.g. "celia_imrie"
@@ -41,15 +59,15 @@ class DashCharts:
         return {
             "total_messages_sent": self.stats.total_messages_sent,
             "total_messages_length": self.stats.total_messages_length,
-            "average_message_length": self.stats.average_message_length
-        }[stat](conversation)
+            "average_message_length": self.stats.average_message_length,
+            "time_chunks": self.stats.time_chunks
+        }[stat](conversation, *args)
 
-    def make_bar_data(self, data):
+    def transform_bar_data(self, data):
         """
-        Convert data of form
+        Transform data of form
         [{'100000793057611': 10501, '100000134684929': 12101}...]
-        to
-        a go.Bar object
+        into a go.Bar object
         """
         # need to separate the user's data from their partners'
         # but first we need to know which one the user is
@@ -88,7 +106,56 @@ class DashCharts:
         )
         return [user, partners]
 
-    def make_bar_chart(self, transformed_data, title):
+    def transform_line_data(self, data, names):
+        """
+        Transform data of form
+        [[{'count': 1939, 'timestamp': '2015'}, ...], ...]
+        into a go.Scatter object for a scatter graph
+        """
+        transformed_data = []
+        for name, conversation in zip(names, data):
+            x, y = [], []  # TODO do this in one list comp?
+            for c in conversation:
+                x.append(c["timestamp"])
+                y.append(c["count"])
+            transformed_data.append(go.Scatter(
+                x=x,
+                y=y,
+                # fill='tozeroy',  # can use tonexty to stack
+                mode='markers',
+                name=name
+                # stackgroup='one'
+            ))
+
+        return transformed_data
+
+    def transform_cumulative_data(self, data, names):
+        """
+        Transform data of form
+        [[{'count': 1939, 'timestamp': '2015'}, ...], ...]
+        into a go.Scatter object for a cumulative line graph
+        """
+        transformed_data = []
+        first = True
+        for name, conversation in zip(names, data):
+            x, y, count = [], [], 0
+            for c in conversation:
+                x.append(c["timestamp"])
+                y.append(c["count"] + count)
+                count += c["count"]
+            transformed_data.append(go.Scatter(
+                x=x,
+                y=y,
+                fill='tozeroy', # if first else 'tonexty',
+                mode='lines',
+                name=name,
+                # stackgroup='one'
+            ))
+            first = False
+
+        return transformed_data
+
+    def make_chart(self, transformed_data, title):
         return dcc.Graph(
             figure=go.Figure(
                 data=transformed_data,
@@ -141,36 +208,6 @@ class DashCharts:
                         'hoverinfo': 'label+percent+name',
                         'textinfo': 'none'
 
-                    },
-                    {
-                        'labels': ['1st', '2nd', '3rd', '4th', '5th'],
-                        'values': [38, 19, 16, 14, 13],
-                        'marker': {'colors': ['rgb(33, 75, 99)',
-                                              'rgb(79, 129, 102)',
-                                              'rgb(151, 179, 100)',
-                                              'rgb(175, 49, 35)',
-                                              'rgb(36, 73, 147)']},
-                        'type': 'pie',
-                        'name': 'Irises',
-                        'domain': {'x': [0, .48],
-                                   'y': [.51, 1]},
-                        'hoverinfo': 'label+percent+name',
-                        'textinfo': 'none'
-                    },
-                    {
-                        'labels': ['1st', '2nd', '3rd', '4th', '5th'],
-                        'values': [31, 24, 19, 18, 8],
-                        'marker': {'colors': ['rgb(146, 123, 21)',
-                                              'rgb(177, 180, 34)',
-                                              'rgb(206, 206, 40)',
-                                              'rgb(175, 51, 21)',
-                                              'rgb(35, 36, 21)']},
-                        'type': 'pie',
-                        'name': 'The Night Café',
-                        'domain': {'x': [.52, 1],
-                                   'y': [.51, 1]},
-                        'hoverinfo': 'label+percent+name',
-                        'textinfo': 'none'
                     }
                 ],
                 'layout': {
@@ -206,15 +243,15 @@ class DashCharts:
         self.app.run_server(debug=True)
 
 
-def get_all_user_names():
+def get_names_from_logs(type="user"):
     # TODO temp way of getting all user chats
     import os
-    all_files = filter(lambda x: "user" in x, list(map(lambda x: x.split('.')[0], os.listdir('logs'))))
-    return [x[len("user_"):] for x in all_files]
+    all_files = filter(lambda x: type in x, list(map(lambda x: x.split('.')[0], os.listdir('logs'))))
+    return [x[len(type)+1:] for x in all_files]
 
 
 if __name__ == '__main__':
     dc = DashCharts(Statistics("messages_oliver_gratton"))
-    all_names = get_all_user_names()
-    dc.solo_conversations_compare("total_messages_sent", all_names)
+    all_names = get_names_from_logs("user") + get_names_from_logs("group")
+    dc.conversation_time_chunks(all_names, "day")
     dc.start_app()
