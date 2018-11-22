@@ -26,7 +26,7 @@ class DashCharts:
         :param users: List of the names of users e.g. ["bob_geldof", "mother_superior"]
         :return: Dash graph
         """
-        data = self.transform_bar_data([self.get_data(user, stat) for user in users])
+        data = self.transform_per_user_bar_data([self.get_data(user, stat) for user in users])
         self.make_app(self.make_chart(data, "%s in Solo Conversations" % (stat,)))
 
     def conversation_time_chunks(self, users, resolution="day", cumulative=True):
@@ -63,7 +63,7 @@ class DashCharts:
             "time_chunks": self.stats.time_chunks
         }[stat](conversation, *args)
 
-    def transform_bar_data(self, data):
+    def transform_per_user_bar_data(self, data):
         """
         Transform data of form
         [{'100000793057611': 10501, '100000134684929': 12101}...]
@@ -112,6 +112,7 @@ class DashCharts:
         [[{'count': 1939, 'timestamp': '2015'}, ...], ...]
         into a go.Scatter object for a scatter graph
         """
+        data = self.pad_time_data(data)
         mode = 'markers' if scatter else 'lines'
         transformed_data = []
         for name, conversation in zip(names, data):
@@ -136,6 +137,7 @@ class DashCharts:
         [[{'count': 1939, 'timestamp': '2015'}, ...], ...]
         into a go.Scatter object for a cumulative line graph
         """
+        data = self.pad_time_data(data)
         transformed_data = []
         for name, conversation in zip(names, data):
             x, y, count = [], [], 0
@@ -153,6 +155,13 @@ class DashCharts:
             ))
 
         return transformed_data
+
+    def pad_time_data(self, data):
+        """ Pad time data with 0s to make sure it stays ordered """
+        # TODO
+        # every dict in the data needs to share the same x values (timestamp)
+        # if there is no corresponding count value, set to 0
+        return data
 
     def make_chart(self, transformed_data, title):
         return dcc.Graph(
@@ -246,9 +255,8 @@ def get_names_from_logs(type="user"):
     all_files = filter(lambda x: type in x, list(map(lambda x: x.split('.')[0], os.listdir('logs'))))
     return [x[len(type)+1:] for x in all_files]
 
-
 if __name__ == '__main__':
     dc = DashCharts(Statistics("messages_oliver_gratton"))
     all_names = get_names_from_logs("user") + get_names_from_logs("group")
-    dc.conversation_time_chunks(all_names, "hour_only", cumulative=False)
+    dc.conversation_time_chunks(all_names, "month", cumulative=False)
     dc.start_app()

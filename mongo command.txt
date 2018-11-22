@@ -1,0 +1,22 @@
+db.thomas_brex.aggregate([{
+        "$match": {"$and": [{"text": {"$ne": null}}, {"text": {"$ne": ""}}]}
+    }, {
+        "$project": {
+            "timestamp": {"$dateToString": {"format": "%Y-%m", "date": "$timestamp"}},
+        }
+    }, {
+        "$group": {
+            "_id": "$timestamp",
+            "count": {"$sum": 1}
+        }
+    }, {
+        "$project": {
+            "_id": 0,
+            "timestamp": "$_id",
+            "count": 1
+        }
+    }, {
+        "$sort": {"timestamp": 1}
+    }
+  ]
+);
