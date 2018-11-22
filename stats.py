@@ -78,45 +78,39 @@ class Statistics(object):
     def time_chunks(self, conversation, resolution="month"):
         collection = self.mongo_db[conversation]
 
-        # TODO fill in the gaps with zeroes (or just either side of an edge value)
+        # TODO fill in the gaps with zeroes (or just pad either side of an edge value)
 
         format = {
             "year": "%Y",
             "month": "%Y-%m",
+            "month_only": "%m",
             "day": "%Y-%m-%d",
-            "hour": "%Y-%m-%dT%H:00:00Z",
-            "minute": "%Y-%m-%dT%H:%M:00Z",
+            "day_only": "%d",
+            "hour": "%Y-%m-%dT%H:00",
+            "hour_only": "%H:00",
+            "minute": "%Y-%m-%dT%H:%M",
             "second": "%Y-%m-%dT%H:%M:%SZ"
         }[resolution]
 
-        result = collection.aggregate(
-            [
-                {
+        result = collection.aggregate([{
                     "$match": {"$and": [{"text": {"$ne": None}}, {"text": {"$ne": ""}}]}
-                },
-                {
+                }, {
                     "$project": {
-                        "_id": 0,
                         "timestamp": {"$dateToString": {"format": format, "date": "$timestamp"}},
                     }
-                },
-                {
+                }, {
                     "$group": {
                         "_id": "$timestamp",
                         "count": {"$sum": 1}
                     }
-                },
-                {
-                    "$sort": {
-                        "_id": 1
-                    }
-                },
-                {
+                }, {
                     "$project": {
                         "_id": 0,
                         "timestamp": "$_id",
                         "count": 1
                     }
+                }, {
+                    "$sort": {"timestamp": 1}
                 }
             ]
         )

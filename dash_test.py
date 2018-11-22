@@ -106,12 +106,13 @@ class DashCharts:
         )
         return [user, partners]
 
-    def transform_line_data(self, data, names):
+    def transform_line_data(self, data, names, scatter=True):
         """
         Transform data of form
         [[{'count': 1939, 'timestamp': '2015'}, ...], ...]
         into a go.Scatter object for a scatter graph
         """
+        mode = 'markers' if scatter else 'lines'
         transformed_data = []
         for name, conversation in zip(names, data):
             x, y = [], []  # TODO do this in one list comp?
@@ -122,7 +123,7 @@ class DashCharts:
                 x=x,
                 y=y,
                 # fill='tozeroy',  # can use tonexty to stack
-                mode='markers',
+                mode=mode,
                 name=name
                 # stackgroup='one'
             ))
@@ -136,7 +137,6 @@ class DashCharts:
         into a go.Scatter object for a cumulative line graph
         """
         transformed_data = []
-        first = True
         for name, conversation in zip(names, data):
             x, y, count = [], [], 0
             for c in conversation:
@@ -146,12 +146,11 @@ class DashCharts:
             transformed_data.append(go.Scatter(
                 x=x,
                 y=y,
-                fill='tozeroy', # if first else 'tonexty',
+                fill='tozeroy',  # if first else 'tonexty',
                 mode='lines',
                 name=name,
                 # stackgroup='one'
             ))
-            first = False
 
         return transformed_data
 
@@ -177,8 +176,7 @@ class DashCharts:
         return dcc.Graph(
             id='pie',
             figure={
-                'data': [
-                    {
+                'data': [{
                         'labels': ['1st', '2nd', '3rd', '4th', '5th'],
                         'values': [38, 27, 18, 10, 7],
                         'type': 'pie',
@@ -192,8 +190,7 @@ class DashCharts:
                                    'y': [0, .49]},
                         'hoverinfo': 'label+percent+name',
                         'textinfo': 'none'
-                    },
-                    {
+                    }, {
                         'labels': ['1st', '2nd', '3rd', '4th', '5th'],
                         'values': [28, 26, 21, 15, 10],
                         'marker': {'colors': ['rgb(177, 127, 38)',
@@ -253,5 +250,5 @@ def get_names_from_logs(type="user"):
 if __name__ == '__main__':
     dc = DashCharts(Statistics("messages_oliver_gratton"))
     all_names = get_names_from_logs("user") + get_names_from_logs("group")
-    dc.conversation_time_chunks(all_names, "day")
+    dc.conversation_time_chunks(all_names, "hour_only", cumulative=False)
     dc.start_app()
